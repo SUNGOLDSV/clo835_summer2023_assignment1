@@ -7,10 +7,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  APP_ECR_REPOSITORY_URL: ${{ secrets.APP_ECR_REPOSITORY_URL }} # Full ECR URL from secrets
-  DB_ECR_REPOSITORY_URL: ${{ secrets.DB_ECR_REPOSITORY_URL }}   # Full ECR URL from secrets
-  APP_IMAGE_NAME: ${{join(slice(split(secrets.APP_ECR_REPOSITORY_URL, '/'), 1), '/')}}
-  DB_IMAGE_NAME: ${{join(slice(split(secrets.DB_ECR_REPOSITORY_URL, '/'), 1), '/')}}
+  APP_ECR_REPOSITORY_URL: ${{ secrets.APP_ECR_REPOSITORY_URL }}
+  DB_ECR_REPOSITORY_URL: ${{ secrets.DB_ECR_REPOSITORY_URL }}
 
 jobs:
   build-and-push-images:
@@ -48,13 +46,13 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           echo "Building MySQL image from Dockerfile_mysql"
-          docker build -t $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }} -t $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }} -f Dockerfile_mysql .
+          docker build -t $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }} -t $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }} -f Dockerfile_mysql .
           
-          echo "Pushing MySQL image $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }}"
-          docker push $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }}
+          echo "Pushing MySQL image $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}"
+          docker push $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}
           
-          echo "Pushing MySQL image $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }}"
-          docker push $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }}
+          echo "Pushing MySQL image $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}"
+          docker push $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}
 
       # --- Build and Push Application Image ---
       - name: Build, Tag, and Push Application Image to ECR
@@ -62,13 +60,13 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           echo "Building Application image from Dockerfile"
-          docker build -t $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }} -t $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }} -f Dockerfile .
+          docker build -t $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }} -t $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }} -f Dockerfile .
           
-          echo "Pushing Application image $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }}"
-          docker push $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }}
+          echo "Pushing Application image $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}"
+          docker push $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}
           
-          echo "Pushing Application image $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }}"
-          docker push $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }}
+          echo "Pushing Application image $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}"
+          docker push $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}
 
       - name: Logout of Amazon ECR
         if: always()
