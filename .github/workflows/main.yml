@@ -1,0 +1,75 @@
+name: Build and Push Docker Images to ECR
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  APP_ECR_REPOSITORY_URL: ${{ secrets.APP_ECR_REPOSITORY_URL }} # Full ECR URL from secrets
+  DB_ECR_REPOSITORY_URL: ${{ secrets.DB_ECR_REPOSITORY_URL }}   # Full ECR URL from secrets
+  APP_IMAGE_NAME: ${{join(slice(split(secrets.APP_ECR_REPOSITORY_URL, '/'), 1), '/')}}
+  DB_IMAGE_NAME: ${{join(slice(split(secrets.DB_ECR_REPOSITORY_URL, '/'), 1), '/')}}
+
+jobs:
+  build-and-push-images:
+    name: Build and Push to ECR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set Image Tags
+        id: image_tags
+        run: |
+          echo "TAG_LATEST=latest" >> $GITHUB_ENV
+          echo "TAG_COMMIT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      # --- Build and Push MySQL Database Image ---
+      - name: Build, Tag, and Push MySQL DB Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "Building MySQL image from Dockerfile_mysql"
+          docker build -t $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }} -t $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }} -f Dockerfile_mysql .
+          
+          echo "Pushing MySQL image $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }}"
+          docker push $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_LATEST }}
+          
+          echo "Pushing MySQL image $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }}"
+          docker push $ECR_REGISTRY/$DB_IMAGE_NAME:${{ env.TAG_COMMIT }}
+
+      # --- Build and Push Application Image ---
+      - name: Build, Tag, and Push Application Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "Building Application image from Dockerfile"
+          docker build -t $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }} -t $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }} -f Dockerfile .
+          
+          echo "Pushing Application image $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }}"
+          docker push $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_LATEST }}
+          
+          echo "Pushing Application image $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }}"
+          docker push $ECR_REGISTRY/$APP_IMAGE_NAME:${{ env.TAG_COMMIT }}
+
+      - name: Logout of Amazon ECR
+        if: always()
+        run: docker logout ${{ steps.login-ecr.outputs.registry }}
