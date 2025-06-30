@@ -1,10 +1,13 @@
 name: Build and Push Docker Images to ECR
 
 on:
-  workflow_dispatch:
+  # Trigger on push to the main branch
   push:
     branches:
       - main
+  
+  # Allow manual runs from the Actions tab
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -17,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      # id-token: write is only needed for OIDC, not access keys.
 
     steps:
       - name: Checkout Repository
@@ -38,36 +41,33 @@ jobs:
       - name: Set Image Tags
         id: image_tags
         run: |
+          echo "TAG_VERSION=v${{ github.run_number }}" >> $GITHUB_ENV
           echo "TAG_LATEST=latest" >> $GITHUB_ENV
-          echo "TAG_COMMIT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+          echo "Using tags: v${{ github.run_number }} and latest"
 
       # --- Build and Push MySQL Database Image ---
       - name: Build, Tag, and Push MySQL DB Image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           echo "Building MySQL image from Dockerfile_mysql"
-          docker build -t $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }} -t $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }} -f Dockerfile_mysql .
           
-          echo "Pushing MySQL image $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}"
-          docker push $DB_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}
+          # Build and tag with both the version (e.g., v1) and 'latest'
+          docker build -t ${{ env.DB_ECR_REPOSITORY_URL }}:${{ env.TAG_VERSION }} -t ${{ env.DB_ECR_REPOSITORY_URL }}:${{ env.TAG_LATEST }} -f Dockerfile_mysql .
           
-          echo "Pushing MySQL image $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}"
-          docker push $DB_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}
+          # Push both tags to the repository at once
+          echo "Pushing MySQL tags: ${{ env.TAG_VERSION }} and ${{ env.TAG_LATEST }}"
+          docker push --all-tags ${{ env.DB_ECR_REPOSITORY_URL }}
 
       # --- Build and Push Application Image ---
       - name: Build, Tag, and Push Application Image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           echo "Building Application image from Dockerfile"
-          docker build -t $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }} -t $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }} -f Dockerfile .
+
+          # Build and tag with both the version (e.g., v1) and 'latest'
+          docker build -t ${{ env.APP_ECR_REPOSITORY_URL }}:${{ env.TAG_VERSION }} -t ${{ env.APP_ECR_REPOSITORY_URL }}:${{ env.TAG_LATEST }} -f Dockerfile .
           
-          echo "Pushing Application image $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}"
-          docker push $APP_ECR_REPOSITORY_URL:${{ env.TAG_LATEST }}
-          
-          echo "Pushing Application image $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}"
-          docker push $APP_ECR_REPOSITORY_URL:${{ env.TAG_COMMIT }}
+          # Push both tags to the repository at once
+          echo "Pushing Application tags: ${{ env.TAG_VERSION }} and ${{ env.TAG_LATEST }}"
+          docker push --all-tags ${{ env.APP_ECR_REPOSITORY_URL }}
 
       - name: Logout of Amazon ECR
         if: always()
